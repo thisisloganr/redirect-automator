@@ -1,0 +1,83 @@
+from fuzzywuzzy import fuzz
+import pandas as pd
+import numpy as np
+import requests
+import os
+from google.colab import files, drive
+
+# File request
+print("File Input or Google Sheet? (f/g):")
+ft = input()
+if ft == "f":
+  fp = files.upload()
+  res = list(fp.keys())[0] 
+  fp = str(res)
+elif ft == "g":
+  print("\n" + "Enter Google Sheet URL:")
+  fp = input()
+  fp = fp.replace("edit?pli=1#gid","export?format=csv&gid").replace("edit#gid","export?format=csv&gid")
+else:
+  print("Invalid File Input")
+
+# Create dataFrame dependent on file type
+if "xlsx" in fp:
+    df = pd.read_excel(fp)
+    fty = "xlsx"
+elif "docs.google" in fp:
+    df = pd.read_csv(fp)
+    fty = "sheet"
+elif "csv" in fp:
+    df = pd.read_csv(fp)
+    fty = "csv"
+else:
+    print("Invalid File Type")
+
+# Create list from new URLs
+new_path = df[list(df.columns)[1]].tolist()
+# Drop new URL column
+df = df.drop(df.columns[1], axis=1)
+# Rename first column
+df.columns.values[0] = "Current URL"
+# Remove empty rows
+df = df.dropna()
+
+def leven(x):
+  lev_max = []
+  for i in range(len(new_path)):    
+    Str1 = x
+    Str2 = new_path[i]
+    l_score = fuzz.ratio(Str1.lower(),Str2.lower())
+    lev_max.append(l_score)
+  m = max(lev_max)
+  pos = [i for i, j in enumerate(lev_max) if j == m]
+  max_leven = pos[0]
+  return new_path[max_leven]
+df['Recommended Destination'] = df[list(df.columns)[0]].apply(leven)
+
+# Adds new column for Levenshtein Distance score
+def leven_score(x):
+  lev_max = []
+  for i in range(len(new_path)):    
+    Str1 = x
+    Str2 = new_path[i]
+    l_score = fuzz.ratio(Str1.lower(),Str2.lower())
+    lev_max.append(l_score)
+  return(max(lev_max))
+df['Match Score'] = df[list(df.columns)[0]].apply(leven_score)
+
+# Sort to bring up lower-chance matches
+df = df.sort_values(by=['Match Score'], ascending = True)
+
+print(df)
+
+# Writes new .csv file
+print("\n" + "Export? (y/n)")
+exp = input()
+if exp == "y":
+  print("\n" + "Enter Client Name:")
+  cn = input()
+  path = cn + " - Recommended Redirects.xlsx"
+  df.to_excel(path)
+  files.download(path)
+else:
+  pass
