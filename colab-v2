@@ -29,6 +29,7 @@ crawl(new, 'new.jl', follow_links=True,custom_settings={'ROBOTSTXT_OBEY': False}
 
 # Create dataframes from crawls
 df_curr = pd.read_json('curr.jl', lines=True)
+df_curr = df_curr[df_curr.status == 200]
 df_new = pd.read_json('new.jl', lines=True)
 
 # Create new df from crawl that's only the URLs
