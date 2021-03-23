@@ -1,0 +1,86 @@
+from fuzzywuzzy import fuzz
+import pandas as pd
+import numpy as np
+import requests
+import os
+from datetime import datetime
+from google.colab import files, drive
+import advertools as adv
+from advertools import crawl
+
+# Set start time
+startTime = datetime.now()
+
+# URL request
+print("Input homepage of current site:")
+curr = input()
+curr = curr.replace(".org/",".org").replace(".edu/",".edu").replace(".com/",".com")
+print("\n" + "Input staging domain for new site:")
+new = input()
+new = new.replace(".org/",".org").replace(".edu/",".edu").replace(".com/",".com")
+
+# Remove previous crawl files
+!rm curr.jl
+!rm new.jl
+
+# Crawl current and staging sites
+crawl(curr, 'curr.jl', follow_links=True,custom_settings={'ROBOTSTXT_OBEY': False})
+crawl(new, 'new.jl', follow_links=True,custom_settings={'ROBOTSTXT_OBEY': False})
+
+# Create dataframes from crawls
+df_curr = pd.read_json('curr.jl', lines=True)
+df_new = pd.read_json('new.jl', lines=True)
+
+# Create new df from crawl that's only the URLs
+curr_urls = df_curr['url'].tolist()
+df = pd.DataFrame(curr_urls, columns =['Current URLs'])
+df['Current URLs'] = df['Current URLs'].str.replace(curr,"")
+df = df.dropna()
+
+# Create list of new URLs and remove Hostname
+new_path = df_new['url'].tolist()
+new_path = [w.replace(new,"") for w in new_path]  
+
+def leven(x):
+  lev_max = []
+  for i in range(len(new_path)):    
+    Str1 = x
+    Str2 = new_path[i]
+    l_score = fuzz.ratio(Str1.lower(),Str2.lower())
+    lev_max.append(l_score)
+  m = max(lev_max)
+  pos = [i for i, j in enumerate(lev_max) if j == m]
+  max_leven = pos[0]
+  return new_path[max_leven]
+df['Recommended Destination'] = df[list(df.columns)[0]].apply(leven)
+
+# Adds new column for Levenshtein Distance score
+def leven_score(x):
+  lev_max = []
+  for i in range(len(new_path)):    
+    Str1 = x
+    Str2 = new_path[i]
+    l_score = fuzz.ratio(Str1.lower(),Str2.lower())
+    lev_max.append(l_score)
+  return(max(lev_max))
+df['Match Score'] = df[list(df.columns)[0]].apply(leven_score)
+
+# Sort to bring up lower-chance matches
+df = df.sort_values(by=['Match Score'], ascending = True)
+
+print(df)
+
+# How long did the script take to run?
+print("\n" + "Time to Run: " + str(datetime.now() - startTime))
+
+# Writes new .csv file
+print("\n" + "Export? (y/n)")
+exp = input()
+if exp == "y":
+  print("\n" + "Enter Client Name:")
+  cn = input()
+  path = cn + " - Recommended Redirects.xlsx"
+  df.to_excel(path)
+  files.download(path)
+else:
+  pass
